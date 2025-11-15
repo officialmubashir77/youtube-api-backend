@@ -3,6 +3,8 @@ import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
 import cloudinary from '../config/cloudinary.config.js';
 import User from '../models/user.model.js';
+import jwt from 'jsonwebtoken';
+
 const router = express.Router();
 
 router.post("/signup", async (req, res) => {
@@ -45,8 +47,61 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.post("/login", (req, res) => {
-  res.send("Login route working fine");
+
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
+
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid email or password" });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        id: user._id,
+        channelName: user.channelName,
+        email: user.email,
+        phone: user.phone,
+        logoId: user.logoId,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      user: {
+        id: user._id,
+        channelName: user.channelName,
+        email: user.email,
+        phone: user.phone,
+        logoId: user.logoId,
+        logoUrl: user.logoUrl,
+        subscribers: user.subscribers,
+        subscribedChannels: user.subscribedChannels,
+      },
+    });
+
+  } catch (error) {
+    console.error("Login error:", error.message);
+    res.status(500).json({ message: "Login failed", error: error.message });
+  }
 });
+
 
 export default router;
